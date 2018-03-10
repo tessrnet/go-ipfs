@@ -34,6 +34,9 @@ type CoreAPI interface {
 	// Dht returns an implementation of Dht API
 	Dht() DhtAPI
 
+	// PubSub returns an implementation of PubSub API
+	PubSub() PubSubAPI
+
 	// ResolvePath resolves the path using Unixfs resolver
 	ResolvePath(context.Context, Path) (ResolvedPath, error)
 
