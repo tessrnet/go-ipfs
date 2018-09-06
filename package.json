@@ -568,6 +568,12 @@
       "hash": "QmVXEPs5wQoqP9wLMUm9rR2f6m91G985DWsPmJ3mrhuG1W",
       "name": "go-random-files",
       "version": "1.0.0"
+    },
+    {
+      "author": "stebalien",
+      "hash": "QmQKUCtsLJJHvqejxsDM3Nk3VqFFCg7JR7gPmnL2GW6RHs",
+      "name": "go-require-gx",
+      "version": "1.0.0"
     }
   ],
   "gxVersion": "0.10.0",

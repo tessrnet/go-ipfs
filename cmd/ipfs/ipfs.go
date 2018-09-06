@@ -5,6 +5,8 @@ import (
 
 	cmds "github.com/ipfs/go-ipfs-cmds"
 	commands "github.com/ipfs/go-ipfs/core/commands"
+
+	_ "github.com/gxed/go-require-gx"
 )
 
 // This is the CLI root, used for executing commands accessible to CLI clients.
