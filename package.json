@@ -551,6 +551,23 @@
       "hash": "QmYfvQoJCUTCJ54Rog3zWSCDWAkwLWFTMKzcwaNMpXYSQT",
       "name": "go-libp2p-quic-transport",
       "version": "0.2.3"
+    },
+    {
+      "author": "mitchellh",
+      "hash": "QmdcULN1WCzgoQmcCaUAmEhwcxHYsDrbZ2LvRJKCL8dMrK",
+      "name": "go-homedir",
+      "version": "1.0.0"
+    },
+    {
+      "hash": "QmPGp7o9UZJw6mknhtTT79DJutdgAMJQZzYFnsuUsMkhqZ",
+      "name": "go-random",
+      "version": "1.0.0"
+    },
+    {
+      "author": "jbenet",
+      "hash": "QmVXEPs5wQoqP9wLMUm9rR2f6m91G985DWsPmJ3mrhuG1W",
+      "name": "go-random-files",
+      "version": "1.0.0"
     }
   ],
   "gxVersion": "0.10.0",
