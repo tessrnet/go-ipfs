@@ -12,8 +12,8 @@ import (
 
 	"github.com/ipfs/go-ipfs/thirdparty/unit"
 
-	random "gx/ipfs/QmPGp7o9UZJw6mknhtTT79DJutdgAMJQZzYFnsuUsMkhqZ/go-random"
-	config "gx/ipfs/QmXUU23sGKdT7AHpyJ4aSvYpXbWjbiuYG1CYhZ3ai3btkG/go-ipfs-config"
+	config "github.com/ipfs/go-ipfs-config"
+	random "github.com/jbenet/go-random"
 )
 
 var (
