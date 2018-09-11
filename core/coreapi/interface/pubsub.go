@@ -24,6 +24,12 @@ type PubSubMessage interface {
 
 	// Data returns the message body
 	Data() []byte
+
+	// Seq returns message identifier
+	Seq() []byte
+
+	// Topics returns list of topics this message was set to
+	Topics() []string
 }
 
 // PubSubAPI specifies the interface to PubSub
