@@ -12,6 +12,7 @@ import (
 	path "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path"
 	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 
+	apicid "gx/ipfs/QmNWQygwYxgz3QzXG2ytTkrHkZ4HnnSh94ASox3JjktFcR/go-cidutil/apicid"
 	"gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
 )
 
@@ -62,12 +63,17 @@ represent it.
 		fi.FileName()
 		res.SetOutput(&coreunix.AddedObject{
 			Name: fi.FileName(),
-			Hash: c.String(),
+			Hash: apicid.FromCid(c),
 		})
 	},
 	Type: coreunix.AddedObject{},
 	Marshalers: cmds.MarshalerMap{
 		cmds.Text: func(res cmds.Response) (io.Reader, error) {
+			_, err := NewCidBaseHandlerLegacy(res.Request()).UseGlobal().Proc()
+			if err != nil {
+				return nil, err
+			}
+
 			v, err := unwrapOutput(res.Output())
 			if err != nil {
 				return nil, err
@@ -77,7 +83,7 @@ represent it.
 			if !ok {
 				return nil, e.TypeErr(o, v)
 			}
-			return strings.NewReader(o.Hash + "\n"), nil
+			return strings.NewReader(o.Hash.String() + "\n"), nil
 		},
 	},
 }

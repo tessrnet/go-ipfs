@@ -18,6 +18,7 @@ import (
 	trickle "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/importer/trickle"
 	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 
+	apicid "gx/ipfs/QmNWQygwYxgz3QzXG2ytTkrHkZ4HnnSh94ASox3JjktFcR/go-cidutil/apicid"
 	posinfo "gx/ipfs/QmPG32VXR5jmpo9q8R9FNdR4Ae97Ky9CiZE6SctJLUB79H/go-ipfs-posinfo"
 	cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
 	logging "gx/ipfs/QmRREK2CAZ5Re2Bd9zZFG6FeYDppUWt5cMgsoUEp3ktgSr/go-log"
@@ -41,16 +42,16 @@ type Link struct {
 }
 
 type Object struct {
-	Hash  string
+	Hash  apicid.Hash
 	Links []Link
 	Size  string
 }
 
 type AddedObject struct {
 	Name  string
-	Hash  string `json:",omitempty"`
-	Bytes int64  `json:",omitempty"`
-	Size  string `json:",omitempty"`
+	Hash  apicid.Hash `json:",omitempty"`
+	Bytes int64       `json:",omitempty"`
+	Size  string      `json:",omitempty"`
 }
 
 // NewAdder Returns a new Adder used for a file add operation.
@@ -564,7 +565,7 @@ func getOutput(dagnode ipld.Node) (*Object, error) {
 	}
 
 	output := &Object{
-		Hash:  c.String(),
+		Hash:  apicid.FromCid(c),
 		Size:  strconv.FormatUint(s, 10),
 		Links: make([]Link, len(dagnode.Links())),
 	}

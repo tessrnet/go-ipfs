@@ -15,10 +15,10 @@ import (
 	dagtest "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag/test"
 	blockservice "gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
 
+	cidutil "gx/ipfs/QmNWQygwYxgz3QzXG2ytTkrHkZ4HnnSh94ASox3JjktFcR/go-cidutil"
 	cmds "gx/ipfs/QmPXR4tNdLbp8HsZiPMjpsgqphX9Vhw2J6Jh5MKH2ovW3D/go-ipfs-cmds"
 	mh "gx/ipfs/QmPnFwZ2JXKnXgMw8CdBPxn7FWh6LLdjUjxV1fKHuJnkr8/go-multihash"
 	pb "gx/ipfs/QmPtj12fdwuAqj9sBSTNUxBNu8kCGNp8b3o8yUzMm5GHpq/pb"
-	cidutil "gx/ipfs/QmQJSeE3CX4zos9qeaG8EhecEK9zvrTEfTG84J8C5NVRwt/go-cidutil"
 	mfs "gx/ipfs/QmRkrpnhZqDxTxwGCsDbuZMr7uCFZHH6SGfrcjgEQwxF3t/go-mfs"
 	cmdkit "gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
 	files "gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit/files"
@@ -367,6 +367,11 @@ You can now check what blocks have been created by:
 				log.Warning("cannot determine size of input file")
 			}
 
+			_, err := NewCidBaseHandler(req).UseGlobal().Proc()
+			if err != nil {
+				return err
+			}
+
 			progressBar := func(wait chan struct{}) {
 				defer close(wait)
 
@@ -402,8 +407,9 @@ You can now check what blocks have been created by:
 							break LOOP
 						}
 						output := out.(*coreunix.AddedObject)
-						if len(output.Hash) > 0 {
-							lastHash = output.Hash
+						hash := output.Hash.String()
+						if len(hash) > 0 {
+							lastHash = hash
 							if quieter {
 								continue
 							}
@@ -413,9 +419,9 @@ You can now check what blocks have been created by:
 								fmt.Fprintf(os.Stderr, "\033[2K\r")
 							}
 							if quiet {
-								fmt.Fprintf(os.Stdout, "%s\n", output.Hash)
+								fmt.Fprintf(os.Stdout, "%s\n", hash)
 							} else {
-								fmt.Fprintf(os.Stdout, "added %s %s\n", output.Hash, output.Name)
+								fmt.Fprintf(os.Stdout, "added %s %s\n", hash, output.Name)
 							}
 
 						} else {

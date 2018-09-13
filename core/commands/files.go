@@ -23,6 +23,7 @@ import (
 	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 	bservice "gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
 
+	apicid "gx/ipfs/QmNWQygwYxgz3QzXG2ytTkrHkZ4HnnSh94ASox3JjktFcR/go-cidutil/apicid"
 	humanize "gx/ipfs/QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K/go-humanize"
 	cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
 	cmds "gx/ipfs/QmPXR4tNdLbp8HsZiPMjpsgqphX9Vhw2J6Jh5MKH2ovW3D/go-ipfs-cmds"
@@ -77,7 +78,7 @@ var hashOption = cmdkit.StringOption("hash", "Hash function to use. Will set Cid
 var errFormat = errors.New("format was set by multiple options. Only one format option is allowed")
 
 type statOutput struct {
-	Hash           string
+	Hash           apicid.Hash
 	Size           uint64
 	CumulativeSize uint64
 	Blocks         int
@@ -162,13 +163,18 @@ var filesStatCmd = &cmds.Command{
 	},
 	Encoders: cmds.EncoderMap{
 		cmds.Text: cmds.MakeEncoder(func(req *cmds.Request, w io.Writer, v interface{}) error {
+			_, err := NewCidBaseHandler(req).UseGlobal().Proc()
+			if err != nil {
+				return err
+			}
+
 			out, ok := v.(*statOutput)
 			if !ok {
 				return e.TypeErr(out, v)
 			}
 
 			s, _ := statGetFormatOptions(req)
-			s = strings.Replace(s, "<hash>", out.Hash, -1)
+			s = strings.Replace(s, "<hash>", out.Hash.String(), -1)
 			s = strings.Replace(s, "<size>", fmt.Sprintf("%d", out.Size), -1)
 			s = strings.Replace(s, "<cumulsize>", fmt.Sprintf("%d", out.CumulativeSize), -1)
 			s = strings.Replace(s, "<childs>", fmt.Sprintf("%d", out.Blocks), -1)
@@ -239,7 +245,7 @@ func statNode(nd ipld.Node) (*statOutput, error) {
 		}
 
 		return &statOutput{
-			Hash:           c.String(),
+			Hash:           apicid.FromCid(c),
 			Blocks:         len(nd.Links()),
 			Size:           d.GetFilesize(),
 			CumulativeSize: cumulsize,
@@ -247,7 +253,7 @@ func statNode(nd ipld.Node) (*statOutput, error) {
 		}, nil
 	case *dag.RawNode:
 		return &statOutput{
-			Hash:           c.String(),
+			Hash:           apicid.FromCid(c),
 			Blocks:         0,
 			Size:           cumulsize,
 			CumulativeSize: cumulsize,
@@ -486,6 +492,11 @@ Examples:
 	},
 	Marshalers: oldcmds.MarshalerMap{
 		oldcmds.Text: func(res oldcmds.Response) (io.Reader, error) {
+			_, err := NewCidBaseHandlerLegacy(res.Request()).UseGlobal().Proc()
+			if err != nil {
+				return nil, err
+			}
+
 			v, err := unwrapOutput(res.Output())
 			if err != nil {
 				return nil, err
