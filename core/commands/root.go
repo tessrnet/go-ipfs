@@ -2,6 +2,7 @@ package commands
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -145,64 +146,46 @@ var rootSubcommands = map[string]*cmds.Command{
 	"shutdown":  daemonShutdownCmd,
 }
 
-// RootRO is the readonly version of Root
-var RootRO = &cmds.Command{}
-
-var CommandsDaemonROCmd = CommandsCmd(RootRO)
-
-var RefsROCmd = &oldcmds.Command{}
-
-var rootROSubcommands = map[string]*cmds.Command{
-	"commands": CommandsDaemonROCmd,
-	"cat":      CatCmd,
-	"block": &cmds.Command{
-		Subcommands: map[string]*cmds.Command{
-			"stat": blockStatCmd,
-			"get":  blockGetCmd,
-		},
-	},
-	"get": GetCmd,
-	"dns": lgc.NewCommand(DNSCmd),
-	"ls":  lgc.NewCommand(LsCmd),
-	"name": &cmds.Command{
-		Subcommands: map[string]*cmds.Command{
-			"resolve": name.IpnsCmd,
-		},
-	},
-	"object": lgc.NewCommand(&oldcmds.Command{
-		Subcommands: map[string]*oldcmds.Command{
-			"data":  ocmd.ObjectDataCmd,
-			"links": ocmd.ObjectLinksCmd,
-			"get":   ocmd.ObjectGetCmd,
-			"stat":  ocmd.ObjectStatCmd,
-		},
-	}),
-	"dag": lgc.NewCommand(&oldcmds.Command{
-		Subcommands: map[string]*oldcmds.Command{
-			"get":     dag.DagGetCmd,
-			"resolve": dag.DagResolveCmd,
-		},
-	}),
-	"resolve": ResolveCmd,
-	"version": lgc.NewCommand(VersionCmd),
-}
-
 func init() {
 	Root.ProcessHelp()
-	*RootRO = *Root
-
-	// sanitize readonly refs command
-	*RefsROCmd = *RefsCmd
-	RefsROCmd.Subcommands = map[string]*oldcmds.Command{}
-
-	// this was in the big map definition above before,
-	// but if we leave it there lgc.NewCommand will be executed
-	// before the value is updated (:/sanitize readonly refs command/)
-	rootROSubcommands["refs"] = lgc.NewCommand(RefsROCmd)
-
 	Root.Subcommands = rootSubcommands
+}
 
-	RootRO.Subcommands = rootROSubcommands
+// TOOD(lgierth):
+// - consider to always block: daemon, init, diag, bootstrap/add, bootstrap/rm, config/*
+// - figure out how "commands" command works with this
+// - handle "refs"
+func RootSubset(allowed []string) (*cmds.Command, error) {
+	subset := new(cmds.Command)
+	*subset = *Root
+	subset.Subcommands = map[string]*cmds.Command{}
+
+	for _, path := range allowed {
+		if path == "commands" {
+			continue
+		}
+
+		pathelems := strings.Split(path, "/")
+		in := Root
+		out := subset
+		for _, elem := range pathelems {
+			nextIn, ok := in.Subcommands[elem]
+			if !ok {
+				return nil, fmt.Errorf("unknown command: %s", path)
+			}
+
+			nextOut := new(cmds.Command)
+			*nextOut = *nextIn
+			nextOut.Subcommands = map[string]*cmds.Command{}
+
+			out.Subcommands[elem] = nextOut
+			out = nextOut
+			in = nextIn
+		}
+	}
+
+	subset.Subcommands["commands"] = CommandsCmd(subset)
+	return subset, nil
 }
 
 type MessageOutput struct {

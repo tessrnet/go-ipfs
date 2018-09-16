@@ -89,6 +89,7 @@ func addCORSDefaults(c *cmdsHttp.ServerConfig) {
 	}
 }
 
+// TODO: emit warning if we actually patch stuff
 func patchCORSVars(c *cmdsHttp.ServerConfig, addr net.Addr) {
 
 	// we have to grab the port from an addr, which may be an ip6 addr.
@@ -143,8 +144,17 @@ func CommandsOption(cctx oldcmds.Context) ServeOption {
 
 // CommandsROOption constructs a ServerOption for hooking the read-only commands
 // into the HTTP server.
-func CommandsROOption(cctx oldcmds.Context) ServeOption {
-	return commandsOption(cctx, corecommands.RootRO)
+func GatewayCommandsOption(cctx oldcmds.Context, allowed []string) ServeOption {
+	if len(allowed) == 0 {
+		allowed = append(allowed, config.DefaultGatewayAPICommands()...)
+	}
+	root, err := corecommands.RootSubset(allowed)
+	if err != nil {
+		return func(n *core.IpfsNode, l net.Listener, mux *http.ServeMux) (*http.ServeMux, error) {
+			return nil, err
+		}
+	}
+	return commandsOption(cctx, root)
 }
 
 // CheckVersionOption returns a ServeOption that checks whether the client ipfs version matches. Does nothing when the user agent string does not contain `/go-ipfs/`
