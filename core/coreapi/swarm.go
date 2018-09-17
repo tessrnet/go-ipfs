@@ -2,7 +2,6 @@ package coreapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -14,6 +13,8 @@ import (
 	pstore "gx/ipfs/Qmda4cPRvSRyox3SqgJN6DfSZGU5TtHufPTp9uXjFj71X6/go-libp2p-peerstore"
 	swarm "gx/ipfs/QmeDpqUwwdye8ABKVMPXKuWwPVURFdqTqssbTUB39E2Nwd/go-libp2p-swarm"
 	iaddr "gx/ipfs/QmePSRaGafvmURQwQkHPDBJsaGwKXC1WpBBHVCQxdr8FPn/go-ipfs-addr"
+	inet "gx/ipfs/QmZNJyx9GGCX4GeuHnLB8fxaxMLs4MjTjHokxfQcCd6Nve/go-libp2p-net"
+	protocol "gx/ipfs/QmZNkThpqfVXs9GNbexPrfBbXSLNYeKrE7jwFM2oqHbyqN/go-libp2p-protocol"
 )
 
 type SwarmAPI struct {
@@ -29,7 +30,7 @@ type connInfo struct {
 	muxer string
 }
 
-func (api *SwarmAPI) Connect(ctx context.Context, addr ma.Multiaddr) error {
+func (api *SwarmAPI) Connect(ctx context.Context, pi pstore.PeerInfo) error {
 	if api.node.PeerHost == nil {
 		return coreiface.ErrOffline
 	}
@@ -37,16 +38,6 @@ func (api *SwarmAPI) Connect(ctx context.Context, addr ma.Multiaddr) error {
 	swrm, ok := api.node.PeerHost.Network().(*swarm.Swarm)
 	if !ok {
 		return fmt.Errorf("peerhost network was not swarm")
-	}
-
-	ia, err := iaddr.ParseMultiaddr(ma.Multiaddr(addr))
-	if err != nil {
-		return err
-	}
-
-	pi := pstore.PeerInfo{
-		ID:    ia.ID(),
-		Addrs: []ma.Multiaddr{ia.Transport()},
 	}
 
 	swrm.Backoff().Clear(pi.ID)
@@ -65,36 +56,38 @@ func (api *SwarmAPI) Disconnect(ctx context.Context, addr ma.Multiaddr) error {
 	}
 
 	taddr := ia.Transport()
+	id := ia.ID()
+	net := api.node.PeerHost.Network()
 
-	found := false
-	conns := api.node.PeerHost.Network().ConnsToPeer(ia.ID())
-	for _, conn := range conns {
-		if !conn.RemoteMultiaddr().Equal(taddr) {
-			continue
-		}
-
-		if err := conn.Close(); err != nil {
+	if taddr == nil {
+		if net.Connectedness(id) != inet.Connected {
+			return coreiface.ErrNotConnected
+		} else if err := net.ClosePeer(id); err != nil {
 			return err
 		}
-		found = true
-		break
-	}
+	} else {
+		for _, conn := range net.ConnsToPeer(id) {
+			if !conn.RemoteMultiaddr().Equal(taddr) {
+				continue
+			}
 
-	if !found {
-		return errors.New("conn not found")
+			return conn.Close()
+		}
+
+		return coreiface.ErrConnNotFound
 	}
 
 	return nil
 }
 
-func (api *SwarmAPI) Peers(context.Context) ([]coreiface.PeerInfo, error) {
+func (api *SwarmAPI) Peers(context.Context) ([]coreiface.ConnectionInfo, error) {
 	if api.node.PeerHost == nil {
 		return nil, coreiface.ErrOffline
 	}
 
 	conns := api.node.PeerHost.Network().Conns()
 
-	var out []coreiface.PeerInfo
+	var out []coreiface.ConnectionInfo
 	for _, c := range conns {
 		pid := c.RemotePeer()
 		addr := c.RemoteMultiaddr()
@@ -133,12 +126,12 @@ func (ci *connInfo) Latency(context.Context) (time.Duration, error) {
 	return ci.api.node.Peerstore.LatencyEWMA(peer.ID(ci.ID())), nil
 }
 
-func (ci *connInfo) Streams(context.Context) ([]string, error) {
+func (ci *connInfo) Streams(context.Context) ([]protocol.ID, error) {
 	streams := ci.conn.GetStreams()
 
-	out := make([]string, len(streams))
+	out := make([]protocol.ID, len(streams))
 	for i, s := range streams {
-		out[i] = string(s.Protocol())
+		out[i] = s.Protocol()
 	}
 
 	return out, nil
