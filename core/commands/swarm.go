@@ -20,6 +20,7 @@ import (
 	"gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
 	"gx/ipfs/QmYVqYJTVjetcf1guieEgWpK1PZtHPytP624vKzTF1P3r2/go-ipfs-config"
 	ma "gx/ipfs/QmYmsdtJ3HsodkePE3eU3TsCaP2YvPZJ4LoXnNkDE5Tpt7/go-multiaddr"
+	inet "gx/ipfs/QmZNJyx9GGCX4GeuHnLB8fxaxMLs4MjTjHokxfQcCd6Nve/go-libp2p-net"
 	pstore "gx/ipfs/Qmda4cPRvSRyox3SqgJN6DfSZGU5TtHufPTp9uXjFj71X6/go-libp2p-peerstore"
 	"gx/ipfs/QmeDpqUwwdye8ABKVMPXKuWwPVURFdqTqssbTUB39E2Nwd/go-libp2p-swarm"
 	iaddr "gx/ipfs/QmePSRaGafvmURQwQkHPDBJsaGwKXC1WpBBHVCQxdr8FPn/go-ipfs-addr"
@@ -65,14 +66,9 @@ var swarmPeersCmd = &cmds.Command{
 		cmdkit.BoolOption("direction", "Also list information about the direction of connection"),
 	},
 	Run: func(req *cmds.Request, res cmds.ResponseEmitter, env cmds.Environment) {
-		n, err := cmdenv.GetNode(env)
+		api, err := cmdenv.GetApi(env)
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
-			return
-		}
-
-		if n.PeerHost == nil {
-			res.SetError(ErrNotOnline, cmdkit.ErrClient)
 			return
 		}
 
@@ -81,31 +77,31 @@ var swarmPeersCmd = &cmds.Command{
 		streams, _ := req.Options["streams"].(bool)
 		direction, _ := req.Options["direction"].(bool)
 
-		conns := n.PeerHost.Network().Conns()
+		conns, err := api.Swarm().Peers(req.Context)
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
+
 		var out connInfos
 		for _, c := range conns {
-			pid := c.RemotePeer()
-			addr := c.RemoteMultiaddr()
 			ci := connInfo{
-				Addr: addr.String(),
-				Peer: pid.Pretty(),
+				Addr: c.Address().String(),
+				Peer: c.ID().Pretty(),
 			}
-
-			/*
-				// FIXME(steb):
-							swcon, ok := c.(*swarm.Conn)
-							if ok {
-								ci.Muxer = fmt.Sprintf("%T", swcon.StreamConn().Conn())
-							}
-			*/
 
 			if verbose || direction {
 				// set direction
-				ci.Direction = c.Stat().Direction
+				ci.Direction = c.Direction()
 			}
 
 			if verbose || latency {
-				lat := n.Peerstore.LatencyEWMA(pid)
+				lat, err := c.Latency(req.Context)
+				if err != nil {
+					res.SetError(err, cmdkit.ErrNormal)
+					return
+				}
+
 				if lat == 0 {
 					ci.Latency = "n/a"
 				} else {
@@ -113,10 +109,14 @@ var swarmPeersCmd = &cmds.Command{
 				}
 			}
 			if verbose || streams {
-				strs := c.GetStreams()
+				strs, err := c.Streams(req.Context)
+				if err != nil {
+					res.SetError(err, cmdkit.ErrNormal)
+					return
+				}
 
 				for _, s := range strs {
-					ci.Streams = append(ci.Streams, streamInfo{Protocol: string(s.Protocol())})
+					ci.Streams = append(ci.Streams, streamInfo{Protocol: string(s)})
 				}
 			}
 			sort.Sort(&ci)
@@ -230,28 +230,27 @@ var swarmAddrsCmd = &cmds.Command{
 		"listen": swarmAddrsListenCmd,
 	},
 	Run: func(req *cmds.Request, res cmds.ResponseEmitter, env cmds.Environment) {
-		n, err := cmdenv.GetNode(env)
+		api, err := cmdenv.GetApi(env)
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		if n.PeerHost == nil {
-			res.SetError(ErrNotOnline, cmdkit.ErrClient)
+		addrs, err := api.Swarm().KnownAddrs(req.Context)
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		addrs := make(map[string][]string)
-		ps := n.PeerHost.Network().Peerstore()
-		for _, p := range ps.Peers() {
+		out := make(map[string][]string)
+		for p, paddrs := range addrs {
 			s := p.Pretty()
-			for _, a := range ps.Addrs(p) {
-				addrs[s] = append(addrs[s], a.String())
+			for _, a := range paddrs {
+				out[s] = append(out[s], a.String())
 			}
-			sort.Sort(sort.StringSlice(addrs[s]))
 		}
 
-		cmds.EmitOnce(res, &addrMap{Addrs: addrs})
+		cmds.EmitOnce(res, &addrMap{Addrs: out})
 	},
 	Encoders: cmds.EncoderMap{
 		cmds.Text: cmds.MakeEncoder(func(req *cmds.Request, w io.Writer, v interface{}) error {
@@ -291,25 +290,30 @@ var swarmAddrsLocalCmd = &cmds.Command{
 		cmdkit.BoolOption("id", "Show peer ID in addresses."),
 	},
 	Run: func(req *cmds.Request, res cmds.ResponseEmitter, env cmds.Environment) {
-		n, err := cmdenv.GetNode(env)
+		api, err := cmdenv.GetApi(env)
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		if n.PeerHost == nil {
-			res.SetError(ErrNotOnline, cmdkit.ErrClient)
+		showid, _ := req.Options["id"].(bool)
+		self, err := api.Key().Self(req.Context)
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		showid, _ := req.Options["id"].(bool)
-		id := n.Identity.Pretty()
+		maddrs, err := api.Swarm().LocalAddrs(req.Context)
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
 
 		var addrs []string
-		for _, addr := range n.PeerHost.Addrs() {
+		for _, addr := range maddrs {
 			saddr := addr.String()
 			if showid {
-				saddr = path.Join(saddr, "ipfs", id)
+				saddr = path.Join(saddr, "ipfs", self.ID().Pretty())
 			}
 			addrs = append(addrs, saddr)
 		}
@@ -330,19 +334,14 @@ var swarmAddrsListenCmd = &cmds.Command{
 `,
 	},
 	Run: func(req *cmds.Request, res cmds.ResponseEmitter, env cmds.Environment) {
-		n, err := cmdenv.GetNode(env)
+		api, err := cmdenv.GetApi(env)
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		if n.PeerHost == nil {
-			res.SetError(ErrNotOnline, cmdkit.ErrClient)
-			return
-		}
-
 		var addrs []string
-		maddrs, err := n.PeerHost.Network().InterfaceListenAddresses()
+		maddrs, err := api.Swarm().ListenAddrs(req.Context)
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
