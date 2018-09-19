@@ -29,8 +29,8 @@ import (
 	cmds "gx/ipfs/QmPXR4tNdLbp8HsZiPMjpsgqphX9Vhw2J6Jh5MKH2ovW3D/go-ipfs-cmds"
 	mh "gx/ipfs/QmPnFwZ2JXKnXgMw8CdBPxn7FWh6LLdjUjxV1fKHuJnkr8/go-multihash"
 	logging "gx/ipfs/QmRREK2CAZ5Re2Bd9zZFG6FeYDppUWt5cMgsoUEp3ktgSr/go-log"
-	mfs "gx/ipfs/QmRkrpnhZqDxTxwGCsDbuZMr7uCFZHH6SGfrcjgEQwxF3t/go-mfs"
 	cmdkit "gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
+	mfs "gx/ipfs/QmUbAxuGfnfiWvAcJxZqJNFZe3wPpEmuNA5YTWk96YKKcp/go-mfs"
 	offline "gx/ipfs/QmcRC35JF2pJQneAxa5LdQBQRumWggccWErogSrCkS1h8T/go-ipfs-exchange-offline"
 	ipld "gx/ipfs/QmdDXJs4axxefSPgK6Y1QhpJWKuDPnGJiqgq4uncb4rFHL/go-ipld-format"
 )
@@ -482,7 +482,7 @@ Examples:
 					res.SetError(err, cmdkit.ErrNormal)
 					return
 				}
-				out.Entries[0].Hash = nd.Cid().String()
+				out.Entries[0].Hash = apicid.FromCid(nd.Cid())
 			}
 			res.SetOutput(out)
 			return
