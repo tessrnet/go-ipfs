@@ -10,15 +10,14 @@ import (
 	cmds "github.com/ipfs/go-ipfs/commands"
 	core "github.com/ipfs/go-ipfs/core"
 	e "github.com/ipfs/go-ipfs/core/commands/e"
+	"github.com/ipfs/go-ipfs/core/coreapi/interface"
+	"github.com/ipfs/go-ipfs/core/coreapi/interface/options"
 	corerepo "github.com/ipfs/go-ipfs/core/corerepo"
 	pin "github.com/ipfs/go-ipfs/pin"
-	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
 
 	cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
 	"gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
 	"gx/ipfs/QmVkMRSkXrpjqrroEXWuYBvDBnXCdMMY6gsKicBGVGUqKT/go-verifcid"
-	path "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path"
-	resolver "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path/resolver"
 	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 	bserv "gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
 	offline "gx/ipfs/QmcRC35JF2pJQneAxa5LdQBQRumWggccWErogSrCkS1h8T/go-ipfs-exchange-offline"
@@ -68,6 +67,12 @@ var addPinCmd = &cmds.Command{
 			return
 		}
 
+		api, err := req.InvocContext().GetApi()
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
+
 		defer n.Blockstore.PinLock().Unlock()
 
 		// set recursive flag
@@ -79,7 +84,7 @@ var addPinCmd = &cmds.Command{
 		showProgress, _, _ := req.Option("progress").Bool()
 
 		if !showProgress {
-			added, err := corerepo.Pin(n, req.Context(), req.Arguments(), recursive)
+			added, err := corerepo.Pin(n, api, req.Context(), req.Arguments(), recursive)
 			if err != nil {
 				res.SetError(err, cmdkit.ErrNormal)
 				return
@@ -99,7 +104,7 @@ var addPinCmd = &cmds.Command{
 		}
 		ch := make(chan pinResult, 1)
 		go func() {
-			added, err := corerepo.Pin(n, ctx, req.Arguments(), recursive)
+			added, err := corerepo.Pin(n, api, ctx, req.Arguments(), recursive)
 			ch <- pinResult{pins: added, err: err}
 		}()
 
@@ -193,6 +198,12 @@ collected if needed. (By default, recursively. Use -r=false for direct pins.)
 			return
 		}
 
+		api, err := req.InvocContext().GetApi()
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
+
 		// set recursive flag
 		recursive, _, err := req.Option("recursive").Bool()
 		if err != nil {
@@ -200,7 +211,7 @@ collected if needed. (By default, recursively. Use -r=false for direct pins.)
 			return
 		}
 
-		removed, err := corerepo.Unpin(n, req.Context(), req.Arguments(), recursive)
+		removed, err := corerepo.Unpin(n, api, req.Context(), req.Arguments(), recursive)
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
@@ -287,6 +298,12 @@ Example:
 			return
 		}
 
+		api, err := req.InvocContext().GetApi()
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
+
 		typeStr, _, err := req.Option("type").String()
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
@@ -304,7 +321,7 @@ Example:
 		var keys map[string]RefKeyObject
 
 		if len(req.Arguments()) > 0 {
-			keys, err = pinLsKeys(req.Context(), req.Arguments(), typeStr, n)
+			keys, err = pinLsKeys(req.Context(), req.Arguments(), typeStr, n, api)
 		} else {
 			keys, err = pinLsAll(req.Context(), typeStr, n)
 		}
@@ -364,7 +381,7 @@ new pin and removing the old one.
 	},
 	Type: PinOutput{},
 	Run: func(req cmds.Request, res cmds.Response) {
-		n, err := req.InvocContext().GetNode()
+		api, err := req.InvocContext().GetApi()
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
@@ -376,42 +393,19 @@ new pin and removing the old one.
 			return
 		}
 
-		from, err := path.ParsePath(req.Arguments()[0])
+		from, err := iface.ParsePath(req.Arguments()[0])
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		to, err := path.ParsePath(req.Arguments()[1])
+		to, err := iface.ParsePath(req.Arguments()[1])
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
 		}
 
-		r := &resolver.Resolver{
-			DAG:         n.DAG,
-			ResolveOnce: uio.ResolveUnixfsOnce,
-		}
-
-		fromc, err := core.ResolveToCid(req.Context(), n.Namesys, r, from)
-		if err != nil {
-			res.SetError(err, cmdkit.ErrNormal)
-			return
-		}
-
-		toc, err := core.ResolveToCid(req.Context(), n.Namesys, r, to)
-		if err != nil {
-			res.SetError(err, cmdkit.ErrNormal)
-			return
-		}
-
-		err = n.Pinning.Update(req.Context(), fromc, toc, unpin)
-		if err != nil {
-			res.SetError(err, cmdkit.ErrNormal)
-			return
-		}
-
-		err = n.Pinning.Flush()
+		err = api.Pin().Update(req.Context(), from, to, options.Pin.Unpin(unpin))
 		if err != nil {
 			res.SetError(err, cmdkit.ErrNormal)
 			return
@@ -501,7 +495,7 @@ type RefKeyList struct {
 	Keys map[string]RefKeyObject
 }
 
-func pinLsKeys(ctx context.Context, args []string, typeStr string, n *core.IpfsNode) (map[string]RefKeyObject, error) {
+func pinLsKeys(ctx context.Context, args []string, typeStr string, n *core.IpfsNode, api iface.CoreAPI) (map[string]RefKeyObject, error) {
 
 	mode, ok := pin.StringToMode(typeStr)
 	if !ok {
@@ -510,23 +504,18 @@ func pinLsKeys(ctx context.Context, args []string, typeStr string, n *core.IpfsN
 
 	keys := make(map[string]RefKeyObject)
 
-	r := &resolver.Resolver{
-		DAG:         n.DAG,
-		ResolveOnce: uio.ResolveUnixfsOnce,
-	}
-
 	for _, p := range args {
-		pth, err := path.ParsePath(p)
+		pth, err := iface.ParsePath(p)
 		if err != nil {
 			return nil, err
 		}
 
-		c, err := core.ResolveToCid(ctx, n.Namesys, r, pth)
+		c, err := api.ResolvePath(ctx, pth)
 		if err != nil {
 			return nil, err
 		}
 
-		pinType, pinned, err := n.Pinning.IsPinnedWithType(c, mode)
+		pinType, pinned, err := n.Pinning.IsPinnedWithType(c.Cid(), mode)
 		if err != nil {
 			return nil, err
 		}

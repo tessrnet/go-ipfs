@@ -5,11 +5,10 @@ import (
 	"errors"
 	"strings"
 
-	namesys "github.com/ipfs/go-ipfs/namesys"
-	path "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path"
-	resolver "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path/resolver"
+	"github.com/ipfs/go-ipfs/namesys"
+	"gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path"
+	"gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path/resolver"
 
-	cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
 	logging "gx/ipfs/QmRREK2CAZ5Re2Bd9zZFG6FeYDppUWt5cMgsoUEp3ktgSr/go-log"
 	ipld "gx/ipfs/QmdDXJs4axxefSPgK6Y1QhpJWKuDPnGJiqgq4uncb4rFHL/go-ipld-format"
 )
@@ -73,38 +72,4 @@ func Resolve(ctx context.Context, nsys namesys.NameSystem, r *resolver.Resolver,
 
 	// ok, we have an IPFS path now (or what we'll treat as one)
 	return r.ResolvePath(ctx, p)
-}
-
-// ResolveToCid resolves a path to a cid.
-//
-// It first checks if the path is already in the form of just a cid (<cid> or
-// /ipfs/<cid>) and returns immediately if so. Otherwise, it falls back onto
-// Resolve to perform resolution of the dagnode being referenced.
-func ResolveToCid(ctx context.Context, nsys namesys.NameSystem, r *resolver.Resolver, p path.Path) (cid.Cid, error) {
-
-	// If the path is simply a cid, parse and return it. Parsed paths are already
-	// normalized (read: prepended with /ipfs/ if needed), so segment[1] should
-	// always be the key.
-	if p.IsJustAKey() {
-		return cid.Decode(p.Segments()[1])
-	}
-
-	// Fall back onto regular dagnode resolution. Retrieve the second-to-last
-	// segment of the path and resolve its link to the last segment.
-	head, tail, err := p.PopLastSegment()
-	if err != nil {
-		return cid.Cid{}, err
-	}
-	dagnode, err := Resolve(ctx, nsys, r, head)
-	if err != nil {
-		return cid.Cid{}, err
-	}
-
-	// Extract and return the cid of the link to the target dag node.
-	link, _, err := dagnode.ResolveLink([]string{tail})
-	if err != nil {
-		return cid.Cid{}, err
-	}
-
-	return link.Cid, nil
 }

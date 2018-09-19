@@ -7,16 +7,13 @@ import (
 	"sort"
 	"text/tabwriter"
 
-	cmdkit "gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
-
 	cmds "github.com/ipfs/go-ipfs/commands"
-	core "github.com/ipfs/go-ipfs/core"
 	e "github.com/ipfs/go-ipfs/core/commands/e"
+	"github.com/ipfs/go-ipfs/core/coreapi/interface"
+
 	unixfs "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs"
-	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
 	unixfspb "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/pb"
-	path "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path"
-	resolver "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path/resolver"
+	cmdkit "gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
 	merkledag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 )
 
@@ -83,6 +80,12 @@ possible, please use 'ipfs ls' instead.
 			return
 		}
 
+		api, err := req.InvocContext().GetApi()
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
+
 		paths := req.Arguments()
 
 		output := LsOutput{
@@ -90,15 +93,16 @@ possible, please use 'ipfs ls' instead.
 			Objects:   map[string]*LsObject{},
 		}
 
-		for _, fpath := range paths {
+		for _, p := range paths {
 			ctx := req.Context()
 
-			resolver := &resolver.Resolver{
-				DAG:         node.DAG,
-				ResolveOnce: uio.ResolveUnixfsOnce,
+			fpath, err := iface.ParsePath(p)
+			if err != nil {
+				res.SetError(err, cmdkit.ErrNormal)
+				return
 			}
 
-			merkleNode, err := core.Resolve(ctx, node.Namesys, resolver, path.Path(fpath))
+			merkleNode, err := api.ResolveNode(ctx, fpath)
 			if err != nil {
 				res.SetError(err, cmdkit.ErrNormal)
 				return
@@ -107,7 +111,7 @@ possible, please use 'ipfs ls' instead.
 			c := merkleNode.Cid()
 
 			hash := c.String()
-			output.Arguments[fpath] = hash
+			output.Arguments[p] = hash
 
 			if _, ok := output.Objects[hash]; ok {
 				// duplicate argument for an already-listed node

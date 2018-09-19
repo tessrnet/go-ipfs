@@ -13,16 +13,17 @@ import (
 	"sync"
 	"testing"
 
-	core "github.com/ipfs/go-ipfs/core"
-	coreunix "github.com/ipfs/go-ipfs/core/coreunix"
-	coremock "github.com/ipfs/go-ipfs/core/mock"
-	importer "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/importer"
-	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
-	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
+	"github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/core/coreapi"
+	"github.com/ipfs/go-ipfs/core/coreapi/interface"
+	"github.com/ipfs/go-ipfs/core/mock"
 
+	"gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/importer"
+	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
 	u "gx/ipfs/QmPdKqUcHGFdeSpvjVoaTRPPstGif9GBZb5Q56RVw9o69A/go-ipfs-util"
-	ci "gx/ipfs/QmRNhSdqzMcuRxX9A1egBeQ3BhDTguDV5HPwi8wRykkPU8/go-testutil/ci"
+	"gx/ipfs/QmRNhSdqzMcuRxX9A1egBeQ3BhDTguDV5HPwi8wRykkPU8/go-testutil/ci"
 	fstest "gx/ipfs/QmSJBsmLP1XMjv8hxYg2rUMdPDB7YUpyBo9idjrJ6Cmq6F/fuse/fs/fstestutil"
+	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 	ipld "gx/ipfs/QmdDXJs4axxefSPgK6Y1QhpJWKuDPnGJiqgq4uncb4rFHL/go-ipld-format"
 	chunker "gx/ipfs/QmdSeG9s4EQ9TGruJJS9Us38TQDZtMmFGwzTYUDVqNTURm/go-ipfs-chunker"
 )
@@ -116,6 +117,8 @@ func TestIpfsStressRead(t *testing.T) {
 	nd, mnt := setupIpfsTest(t, nil)
 	defer mnt.Close()
 
+	api := coreapi.NewCoreAPI(nd)
+
 	var nodes []ipld.Node
 	var paths []string
 
@@ -165,14 +168,14 @@ func TestIpfsStressRead(t *testing.T) {
 			defer wg.Done()
 
 			for i := 0; i < 2000; i++ {
-				item := paths[rand.Intn(len(paths))]
-				fname := path.Join(mnt.Dir, item)
+				item, _ := iface.ParsePath(paths[rand.Intn(len(paths))])
+				fname := path.Join(mnt.Dir, item.String())
 				rbuf, err := ioutil.ReadFile(fname)
 				if err != nil {
 					errs <- err
 				}
 
-				read, err := coreunix.Cat(nd.Context(), nd, item)
+				read, err := api.Unixfs().Cat(nd.Context(), item)
 				if err != nil {
 					errs <- err
 				}

@@ -13,23 +13,21 @@ import (
 
 	oldcmds "github.com/ipfs/go-ipfs/commands"
 	lgc "github.com/ipfs/go-ipfs/commands/legacy"
-	core "github.com/ipfs/go-ipfs/core"
-	cmdenv "github.com/ipfs/go-ipfs/core/commands/cmdenv"
-	e "github.com/ipfs/go-ipfs/core/commands/e"
-	ft "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs"
-	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
-	path "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path"
-	resolver "gx/ipfs/QmX7uSbkNz76yNwBhuwYwRbhihLnJqM73VTCjS3UMJud9A/go-path/resolver"
-	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
-	bservice "gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
+	"github.com/ipfs/go-ipfs/core"
+	"github.com/ipfs/go-ipfs/core/commands/cmdenv"
+	"github.com/ipfs/go-ipfs/core/commands/e"
+	"github.com/ipfs/go-ipfs/core/coreapi/interface"
 
-	humanize "gx/ipfs/QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K/go-humanize"
-	cid "gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
-	cmds "gx/ipfs/QmPXR4tNdLbp8HsZiPMjpsgqphX9Vhw2J6Jh5MKH2ovW3D/go-ipfs-cmds"
+	ft "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs"
+	"gx/ipfs/QmPSBJL4momYnE7DcUyk2DVhD6rH488ZmHBGLbxNdhU44K/go-humanize"
+	"gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
+	"gx/ipfs/QmPXR4tNdLbp8HsZiPMjpsgqphX9Vhw2J6Jh5MKH2ovW3D/go-ipfs-cmds"
 	mh "gx/ipfs/QmPnFwZ2JXKnXgMw8CdBPxn7FWh6LLdjUjxV1fKHuJnkr8/go-multihash"
 	logging "gx/ipfs/QmRREK2CAZ5Re2Bd9zZFG6FeYDppUWt5cMgsoUEp3ktgSr/go-log"
-	mfs "gx/ipfs/QmRkrpnhZqDxTxwGCsDbuZMr7uCFZHH6SGfrcjgEQwxF3t/go-mfs"
-	cmdkit "gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
+	"gx/ipfs/QmRkrpnhZqDxTxwGCsDbuZMr7uCFZHH6SGfrcjgEQwxF3t/go-mfs"
+	"gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit"
+	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
+	bservice "gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
 	offline "gx/ipfs/QmcRC35JF2pJQneAxa5LdQBQRumWggccWErogSrCkS1h8T/go-ipfs-exchange-offline"
 	ipld "gx/ipfs/QmdDXJs4axxefSPgK6Y1QhpJWKuDPnGJiqgq4uncb4rFHL/go-ipld-format"
 )
@@ -120,6 +118,11 @@ var filesStatCmd = &cmds.Command{
 			return err
 		}
 
+		api, err := cmdenv.GetApi(env)
+		if err != nil {
+			return err
+		}
+
 		path, err := checkPath(req.Arguments[0])
 		if err != nil {
 			return err
@@ -138,7 +141,7 @@ var filesStatCmd = &cmds.Command{
 			dagserv = node.DAG
 		}
 
-		nd, err := getNodeFromPath(req.Context, node, dagserv, path)
+		nd, err := getNodeFromPath(req.Context, node, api, path)
 		if err != nil {
 			return err
 		}
@@ -305,6 +308,12 @@ var filesCpCmd = &oldcmds.Command{
 			return
 		}
 
+		api, err := req.InvocContext().GetApi()
+		if err != nil {
+			res.SetError(err, cmdkit.ErrNormal)
+			return
+		}
+
 		flush, _, _ := req.Option("flush").Bool()
 
 		src, err := checkPath(req.Arguments()[0])
@@ -324,7 +333,7 @@ var filesCpCmd = &oldcmds.Command{
 			dst += gopath.Base(src)
 		}
 
-		nd, err := getNodeFromPath(req.Context(), node, node.DAG, src)
+		nd, err := getNodeFromPath(req.Context(), node, api, src)
 		if err != nil {
 			res.SetError(fmt.Errorf("cp: cannot get node from path %s: %s", src, err), cmdkit.ErrNormal)
 			return
@@ -348,20 +357,15 @@ var filesCpCmd = &oldcmds.Command{
 	},
 }
 
-func getNodeFromPath(ctx context.Context, node *core.IpfsNode, dagservice ipld.DAGService, p string) (ipld.Node, error) {
+func getNodeFromPath(ctx context.Context, node *core.IpfsNode, api iface.CoreAPI, p string) (ipld.Node, error) {
 	switch {
 	case strings.HasPrefix(p, "/ipfs/"):
-		np, err := path.ParsePath(p)
+		np, err := iface.ParsePath(p)
 		if err != nil {
 			return nil, err
 		}
 
-		resolver := &resolver.Resolver{
-			DAG:         dagservice,
-			ResolveOnce: uio.ResolveUnixfsOnce,
-		}
-
-		return core.Resolve(ctx, node.Namesys, resolver, np)
+		return api.ResolveNode(ctx, np)
 	default:
 		fsn, err := mfs.Lookup(node.FilesRoot, p)
 		if err != nil {
