@@ -13,6 +13,7 @@ import (
 	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
 	"gx/ipfs/QmPSQnBKM9g7BaUcZCvswUJVscQ1ipjmwxN5PXCjkp9EQ7/go-cid"
 	mh "gx/ipfs/QmPnFwZ2JXKnXgMw8CdBPxn7FWh6LLdjUjxV1fKHuJnkr8/go-multihash"
+	cidutil "gx/ipfs/QmQJSeE3CX4zos9qeaG8EhecEK9zvrTEfTG84J8C5NVRwt/go-cidutil"
 	"gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit/files"
 	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 	ipld "gx/ipfs/QmdDXJs4axxefSPgK6Y1QhpJWKuDPnGJiqgq4uncb4rFHL/go-ipld-format"
@@ -78,6 +79,13 @@ func (api *UnixfsAPI) Add(ctx context.Context, r io.ReadCloser, opts ...options.
 	//fileAdder.NoCopy = nocopy
 	//fileAdder.Name = pathName
 	fileAdder.CidBuilder = prefix
+
+	if settings.InlineLimit > 0 {
+		fileAdder.CidBuilder = cidutil.InlineBuilder{
+			Builder: fileAdder.CidBuilder,
+			Limit:   settings.InlineLimit,
+		}
+	}
 
 	err = fileAdder.AddFile(files.NewReaderFile("", "", r, nil))
 	if err != nil {
