@@ -2,7 +2,6 @@ package coreapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/ipfs/go-ipfs/core"
 	"io"
@@ -13,14 +12,13 @@ import (
 
 	ft "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs"
 	uio "gx/ipfs/QmPL8bYtbACcSFFiSr4s2du7Na382NxRADR8hC7D9FkEA2/go-unixfs/io"
-	mh "gx/ipfs/QmPnFwZ2JXKnXgMw8CdBPxn7FWh6LLdjUjxV1fKHuJnkr8/go-multihash"
-	cidutil "gx/ipfs/QmQJSeE3CX4zos9qeaG8EhecEK9zvrTEfTG84J8C5NVRwt/go-cidutil"
-	mfs "gx/ipfs/QmRkrpnhZqDxTxwGCsDbuZMr7uCFZHH6SGfrcjgEQwxF3t/go-mfs"
+	"gx/ipfs/QmQJSeE3CX4zos9qeaG8EhecEK9zvrTEfTG84J8C5NVRwt/go-cidutil"
+	"gx/ipfs/QmRkrpnhZqDxTxwGCsDbuZMr7uCFZHH6SGfrcjgEQwxF3t/go-mfs"
 	"gx/ipfs/QmSP88ryZkHSRn1fnngAaV2Vcn63WUJzAavnRM9CVdU1Ky/go-ipfs-cmdkit/files"
 	dag "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag"
 	dagtest "gx/ipfs/QmXv5mwmQ74r4aiHcNeQ4GAmfB3aWJuqaE4WyDfDfvkgLM/go-merkledag/test"
-	blockservice "gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
-	offline "gx/ipfs/QmcRC35JF2pJQneAxa5LdQBQRumWggccWErogSrCkS1h8T/go-ipfs-exchange-offline"
+	"gx/ipfs/Qma2KhbQarYTkmSJAeaMGRAg8HAXAhEWK8ge4SReG7ZSD3/go-blockservice"
+	"gx/ipfs/QmcRC35JF2pJQneAxa5LdQBQRumWggccWErogSrCkS1h8T/go-ipfs-exchange-offline"
 	ipld "gx/ipfs/QmdDXJs4axxefSPgK6Y1QhpJWKuDPnGJiqgq4uncb4rFHL/go-ipld-format"
 	bstore "gx/ipfs/QmegPGspn3RpTMQ23Fd3GVVMopo1zsEMurudbFMZ5UXBLH/go-ipfs-blockstore"
 )
@@ -30,41 +28,10 @@ type UnixfsAPI CoreAPI
 // Add builds a merkledag node from a reader, adds it to the blockstore,
 // and returns the key representing that node.
 func (api *UnixfsAPI) Add(ctx context.Context, r io.ReadCloser, opts ...options.UnixfsAddOption) (coreiface.ResolvedPath, error) {
-	settings, err := options.UnixfsAddOptions(opts...)
+	settings, prefix, err := options.UnixfsAddOptions(opts...)
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: move to options
-	// (hash != "sha2-256") -> CIDv1
-	if settings.MhType != mh.SHA2_256 {
-		switch settings.CidVersion {
-		case 0:
-			return nil, errors.New("CIDv0 only supports sha2-256")
-		case 1, -1:
-			settings.CidVersion = 1
-		default:
-			return nil, fmt.Errorf("unknown CID version: %d", settings.CidVersion)
-		}
-	} else {
-		if settings.CidVersion < 0 {
-			// Default to CIDv0
-			settings.CidVersion = 0
-		}
-	}
-
-	// cidV1 -> raw blocks (by default)
-	if settings.CidVersion > 0 && !settings.RawLeavesSet {
-		settings.RawLeaves = true
-	}
-
-	prefix, err := dag.PrefixForCidVersion(settings.CidVersion)
-	if err != nil {
-		return nil, err
-	}
-
-	prefix.MhType = settings.MhType
-	prefix.MhLength = -1
 
 	n := api.node
 	if settings.OnlyHash {
